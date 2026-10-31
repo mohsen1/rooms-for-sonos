@@ -1,0 +1,579 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="light dark">
+<meta name="theme-color" media="(prefers-color-scheme: light)" content="#ffffff">
+<meta name="theme-color" media="(prefers-color-scheme: dark)" content="#0b0b0d">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Rooms">
+<meta name="rooms-version" content="__VERSION__">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<title>Rooms for Sonos</title>
+<link rel="apple-touch-icon" href="/apple-touch-icon.png">
+<link rel="icon" type="image/png" href="/icon-192.png">
+<link rel="manifest" href="/manifest.json">
+<style>
+  :root {
+    --rooms-gap: 0.75rem;
+    --rooms-section-gap: 1.5rem;
+    --rooms-edge: 1rem;
+    --rooms-indent: 1.5rem;
+    --rooms-width: 26rem;
+    /* These grow with the screen, so taller iPhones use their spare height. */
+    --rooms-button: clamp(3.25rem, 9vh, 5.25rem);
+    --rooms-thumb: clamp(1.625rem, 3.9vh, 2.125rem);
+    --rooms-touch: clamp(2.75rem, 7.3vh, 4rem);
+    --rooms-play: clamp(3.5rem, 10vh, 5.5rem);
+    --rooms-art: clamp(4rem, 11vh, 6rem);
+    --rooms-track: 0.5rem;
+    --rooms-idle: 0.45;
+    --rooms-pill: 999px;
+    --rooms-card-radius: 0.75rem;
+    --rooms-background: #fff;
+    --rooms-surface: #f2f0ec;
+    --rooms-text: #0b0b0d;
+    --rooms-muted: #6a6762;
+    --rooms-solid: #0b0b0d;
+    --rooms-on-solid: #fff;
+    --rooms-track-color: #dddad4;
+    --rooms-focus: #6a6762;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --rooms-background: #0b0b0d;
+      --rooms-surface: #1d1c1b;
+      --rooms-text: #f4f1ea;
+      --rooms-muted: #9a978f;
+      --rooms-solid: #f4f1ea;
+      --rooms-on-solid: #0b0b0d;
+      --rooms-track-color: #34322f;
+      --rooms-focus: #9a978f;
+    }
+  }
+  html, body {
+    height: 100%;
+    margin: 0;
+    overflow: hidden;
+    background: var(--rooms-background);
+  }
+  html {
+    touch-action: manipulation;
+    -webkit-tap-highlight-color: transparent;
+    -webkit-text-size-adjust: 100%;
+  }
+  /* Pinned so the page itself can't move. Only main can scroll, and only if the content doesn't fit. */
+  body {
+    position: fixed;
+    inset: 0;
+    color: var(--rooms-text);
+    font: 400 1rem/1.5 system-ui, -apple-system, sans-serif;
+    -webkit-touch-callout: none;
+    -webkit-user-select: none;
+    user-select: none;
+  }
+  [hidden] {
+    display: none !important;
+  }
+  main {
+    display: flex;
+    flex-direction: column;
+    box-sizing: border-box;
+    max-width: var(--rooms-width);
+    height: 100%;
+    margin-inline: auto;
+    padding:
+      calc(env(safe-area-inset-top) + var(--rooms-edge))
+      calc(env(safe-area-inset-right) + var(--rooms-edge))
+      calc(env(safe-area-inset-bottom) + var(--rooms-edge))
+      calc(env(safe-area-inset-left) + var(--rooms-edge));
+    overflow-y: auto;
+    overscroll-behavior: none;
+  }
+  #status {
+    margin: 0 0 var(--rooms-gap);
+    color: var(--rooms-muted);
+  }
+  #rooms, #volumes {
+    display: grid;
+    gap: var(--rooms-gap);
+  }
+  #volumes {
+    margin-block: var(--rooms-section-gap);
+  }
+  button {
+    margin: 0;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    color: inherit;
+    font: inherit;
+    touch-action: manipulation;
+    -webkit-appearance: none;
+    appearance: none;
+  }
+  button:active {
+    opacity: 0.6;
+  }
+  button:disabled {
+    opacity: 0.4;
+  }
+  button:focus-visible, input:focus-visible {
+    outline: 0.125rem solid var(--rooms-focus);
+    outline-offset: 0.125rem;
+  }
+  #rooms button {
+    width: 100%;
+    height: var(--rooms-button);
+    border-radius: var(--rooms-pill);
+    background: var(--rooms-surface);
+    font-size: 1.25rem;
+    font-weight: 500;
+  }
+  #rooms button[aria-pressed="true"] {
+    background: var(--rooms-solid);
+    color: var(--rooms-on-solid);
+  }
+  #volumes label {
+    display: grid;
+    grid-template-columns: 1fr auto;
+    font-size: 1.125rem;
+    font-weight: 500;
+  }
+  /* A room with no music is dimmed, but can still be set ahead of playing there. */
+  #volumes label.idle {
+    opacity: var(--rooms-idle);
+  }
+  /* Rooms sit under Everywhere while it's showing, because it moves them both. */
+  #volumes label:first-child:not([hidden]) ~ label {
+    margin-inline-start: var(--rooms-indent);
+  }
+  .level {
+    color: var(--rooms-muted);
+    font-variant-numeric: tabular-nums;
+  }
+  input {
+    grid-column: 1 / -1;
+    width: 100%;
+    height: var(--rooms-thumb);
+    margin: 0;
+    background: transparent;
+    -webkit-appearance: none;
+    appearance: none;
+  }
+  input::-webkit-slider-runnable-track {
+    height: var(--rooms-track);
+    border-radius: var(--rooms-pill);
+    background: linear-gradient(to right,
+      var(--rooms-solid) var(--level, 0%), var(--rooms-track-color) var(--level, 0%));
+  }
+  input::-webkit-slider-thumb {
+    width: var(--rooms-thumb);
+    height: var(--rooms-thumb);
+    margin-top: calc((var(--rooms-track) - var(--rooms-thumb)) / 2);
+    border: 0;
+    border-radius: 50%;
+    background: var(--rooms-solid);
+    box-shadow: none;
+    -webkit-appearance: none;
+    appearance: none;
+  }
+  input:disabled {
+    opacity: 0.4;
+  }
+  #player {
+    display: grid;
+    flex: none;
+    gap: var(--rooms-gap);
+    margin-top: auto;
+  }
+  .now {
+    display: grid;
+    grid-template-columns: var(--rooms-art) minmax(0, 1fr);
+    overflow: hidden;
+    border-radius: var(--rooms-card-radius);
+    background: var(--rooms-surface);
+    color: inherit;
+    text-decoration: none;
+  }
+  .now:active {
+    opacity: 0.6;
+  }
+  .art {
+    position: relative;
+    min-height: var(--rooms-art);
+    overflow: hidden;
+    border-radius: var(--rooms-card-radius);
+    background: var(--rooms-track-color);
+  }
+  .art img {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+  .track {
+    padding: var(--rooms-gap);
+  }
+  #title, #artist {
+    display: -webkit-box;
+    margin: 0;
+    overflow: hidden;
+    line-height: 1.3;
+    -webkit-box-orient: vertical;
+  }
+  #title {
+    font-size: 1.0625rem;
+    font-weight: 600;
+    -webkit-line-clamp: 3;
+  }
+  #artist {
+    color: var(--rooms-muted);
+    font-size: 0.9375rem;
+    -webkit-line-clamp: 2;
+  }
+  .controls {
+    display: flex;
+    align-items: center;
+    justify-content: space-evenly;
+  }
+  .controls button {
+    display: grid;
+    place-items: center;
+    width: var(--rooms-touch);
+    height: var(--rooms-touch);
+    border-radius: 50%;
+    background: var(--rooms-surface);
+  }
+  .controls svg {
+    width: 60%;
+    height: 60%;
+    fill: currentColor;
+  }
+  .controls #play-pause {
+    width: var(--rooms-play);
+    height: var(--rooms-play);
+    background: var(--rooms-solid);
+    color: var(--rooms-on-solid);
+  }
+  #offline {
+    display: none;
+    gap: var(--rooms-gap);
+    justify-items: center;
+    place-content: center;
+    box-sizing: border-box;
+    height: 100%;
+    padding: var(--rooms-edge);
+    text-align: center;
+  }
+  #offline svg {
+    width: 3rem;
+    height: 3rem;
+    fill: none;
+    stroke: var(--rooms-muted);
+    stroke-width: 1.75;
+    stroke-linecap: round;
+  }
+  #offline h1 {
+    margin: 0;
+    font-size: 1.375rem;
+    line-height: 1.25;
+  }
+  #offline p {
+    max-width: 18rem;
+    margin: 0;
+    color: var(--rooms-muted);
+  }
+  body.offline main {
+    display: none;
+  }
+  body.offline #offline {
+    display: grid;
+  }
+  /* iPhone can't lock a web app to portrait, so sideways it's just the player. */
+  @media (orientation: landscape) and (max-height: 500px) {
+    #status, #rooms, #volumes {
+      display: none;
+    }
+    main {
+      justify-content: center;
+      max-width: none;
+    }
+    #player {
+      width: 100%;
+      max-width: var(--rooms-width);
+      margin: 0 auto;
+    }
+  }
+</style>
+</head>
+<body>
+<main>
+  <p id="status" role="status" hidden></p>
+  <div id="rooms" role="group" aria-label="Play in">
+    <button data-to="first" data-name="first" aria-pressed="false"></button>
+    <button data-to="second" data-name="second" aria-pressed="false"></button>
+    <button data-to="everywhere" aria-pressed="false">Everywhere</button>
+  </div>
+  <div id="volumes" role="group" aria-label="Volume">
+    <label hidden>
+      <span>Everywhere</span>
+      <span class="level" aria-hidden="true"></span>
+      <input type="range" min="0" max="100" data-room="group" disabled>
+    </label>
+    <label>
+      <span data-name="first"></span>
+      <span class="level" aria-hidden="true"></span>
+      <input type="range" min="0" max="100" data-room="first" disabled>
+    </label>
+    <label>
+      <span data-name="second"></span>
+      <span class="level" aria-hidden="true"></span>
+      <input type="range" min="0" max="100" data-room="second" disabled>
+    </label>
+  </div>
+  <section id="player" aria-label="Now playing">
+    <a class="now" href="spotify://">
+      <div class="art"><img id="art" alt="" referrerpolicy="no-referrer" hidden></div>
+      <div class="track">
+        <p id="title" dir="auto">Nothing playing</p>
+        <p id="artist" dir="auto"></p>
+      </div>
+    </a>
+    <div class="controls">
+      <button data-do="previous" aria-label="Previous" disabled>
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 5h2v14H6zm3 7 10-7v14z"/></svg>
+      </button>
+      <button id="play-pause" data-do="play" aria-label="Play" disabled>
+        <svg id="play-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5v14l11-7z"/></svg>
+        <svg id="pause-icon" viewBox="0 0 24 24" aria-hidden="true" hidden><path d="M7 5h4v14H7zm6 0h4v14h-4z"/></svg>
+      </button>
+      <button data-do="next" aria-label="Next" disabled>
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M16 5h2v14h-2zM5 5l10 7-10 7z"/></svg>
+      </button>
+    </div>
+  </section>
+</main>
+<section id="offline" role="status">
+  <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2 8.5a15 15 0 0 1 20 0M5.5 12.5a10 10 0 0 1 13 0M9 16.2a5 5 0 0 1 6 0M12 20h.01M4 3l16 18"/></svg>
+  <h1>Not connected to home Wi-Fi</h1>
+  <p>Rooms works on your home network. It will pick up again as soon as you're back.</p>
+</section>
+<script>
+  const UPDATE_EVERY_MS = 1000;
+  const UPDATE_TIMEOUT_MS = 2000;
+  const SEND_TIMEOUT_MS = 15000;
+  const FAILURES_BEFORE_OFFLINE = 2;
+  const SETTLE_MS = 2500;
+  const MEMORY_KEY = 'rooms';
+  const RELOADED_KEY = 'reloaded-for';
+  const PAGE_VERSION = document.querySelector('meta[name="rooms-version"]').content;
+  const statusLine = document.querySelector('#status');
+  const buttons = [...document.querySelectorAll('#rooms button')];
+  const roomNames = [...document.querySelectorAll('[data-name]')];
+  const sliders = [...document.querySelectorAll('#volumes input')];
+  const groupSlider = document.querySelector('[data-room="group"]');
+  const artImage = document.querySelector('#art');
+  const titleLine = document.querySelector('#title');
+  const artistLine = document.querySelector('#artist');
+  const controls = [...document.querySelectorAll('.controls button')];
+  const playPause = document.querySelector('#play-pause');
+  const playIcon = document.querySelector('#play-icon');
+  const pauseIcon = document.querySelector('#pause-icon');
+  const moves = new Map(sliders.map((slider) => [slider, 0]));
+  const sendingVolume = new Set();
+  let busy = false;
+  let groupDragStarting = true;
+  let tapped = { playing: false, until: 0 };
+  let failures = 0;
+
+  function current({ leader, first, second }) {
+    if (leader) return 'everywhere';
+    if (first === 'PLAYING' && second !== 'PLAYING') return 'first';
+    if (second === 'PLAYING' && first !== 'PLAYING') return 'second';
+    return '';
+  }
+
+  function hasMusic(rooms, room) {
+    return Boolean(rooms.leader) || ['PLAYING', 'PAUSED_PLAYBACK', 'TRANSITIONING'].includes(rooms[room]);
+  }
+
+  function showLevel(slider, level) {
+    slider.value = level;
+    slider.style.setProperty('--level', `${level}%`);
+    slider.parentElement.querySelector('.level').textContent = level;
+  }
+
+  function showPlaying(playing) {
+    playPause.dataset.do = playing ? 'pause' : 'play';
+    playPause.setAttribute('aria-label', playing ? 'Pause' : 'Play');
+    playIcon.toggleAttribute('hidden', playing);
+    pauseIcon.toggleAttribute('hidden', !playing);
+  }
+
+  function renderPlayer(rooms) {
+    const { title, artist, art, player, leader } = rooms;
+    const reported = player === 'PLAYING' || player === 'TRANSITIONING';
+    const paused = player === 'PAUSED_PLAYBACK';
+    const ready = title || reported || paused;
+    const leaderName = rooms[`${leader}Name`];
+    const hint = leaderName ? `Pick ${leaderName} + 1 in Spotify` : 'Pick a room in Spotify';
+    titleLine.textContent = title || (reported ? 'Playing' : paused ? 'Paused' : 'Nothing playing');
+    artistLine.textContent = artist || (ready ? '' : hint);
+    if (art && art !== artImage.getAttribute('src')) artImage.src = art;
+    artImage.hidden = !art;
+    for (const control of controls) control.disabled = !ready;
+    // Sonos takes a moment to report a tap, so show what was asked for until then.
+    showPlaying(Date.now() < tapped.until ? tapped.playing : reported);
+  }
+
+  function render(rooms, movedSliders = []) {
+    const unreachable = rooms.error || !rooms.first || !rooms.second
+      || !rooms.firstVolume || !rooms.secondVolume;
+    const selected = unreachable ? '' : current(rooms);
+    for (const label of roomNames) {
+      const name = rooms[`${label.dataset.name}Name`];
+      if (name) label.textContent = name;
+    }
+    for (const button of buttons) {
+      button.setAttribute('aria-pressed', button.dataset.to === selected);
+    }
+    groupSlider.parentElement.hidden = unreachable || !rooms.leader;
+    for (const slider of sliders) {
+      slider.disabled = unreachable;
+      slider.parentElement.classList.toggle('idle', !unreachable && !hasMusic(rooms, slider.dataset.room));
+      const level = rooms[`${slider.dataset.room}Volume`];
+      if (level && !movedSliders.includes(slider)) showLevel(slider, level);
+    }
+    renderPlayer(rooms);
+    const problem = unreachable
+      ? "Can't reach the speakers. Check that they're switched on."
+      : (rooms.failed && "That didn't finish.") || '';
+    statusLine.textContent = problem;
+    statusLine.hidden = !problem;
+  }
+
+  function remember(rooms) {
+    try {
+      localStorage.setItem(MEMORY_KEY, JSON.stringify({ ...rooms, failed: false }));
+    } catch {
+      // The page still works, it just starts empty next time.
+    }
+  }
+
+  function remembered() {
+    try {
+      return JSON.parse(localStorage.getItem(MEMORY_KEY));
+    } catch {
+      return null;
+    }
+  }
+
+  // iOS opens its cached copy of this page without the network, even away from home.
+  // A full reload is the only renewal it still opens offline; a fetch leaves a copy it won't use.
+  // This only runs once the speakers have answered, so a hotel Wi-Fi login page can't replace it.
+  function renewPage(version) {
+    if (!version || version === PAGE_VERSION || busy || sendingVolume.size) return;
+    try {
+      if (sessionStorage.getItem(RELOADED_KEY) === version) return;
+      sessionStorage.setItem(RELOADED_KEY, version);
+      location.reload();
+    } catch {
+      // This copy keeps working, and the next launch tries again.
+    }
+  }
+
+  async function ask(query = '', options = {}) {
+    const movesBefore = new Map(moves);
+    const timeout = options.method ? SEND_TIMEOUT_MS : UPDATE_TIMEOUT_MS;
+    try {
+      const response = await fetch(`/cgi-bin/rooms${query}`, { ...options, signal: AbortSignal.timeout(timeout) });
+      const rooms = await response.json();
+      // A slow reply must not put back a level the slider has already left.
+      render(rooms, sliders.filter((slider) => moves.get(slider) !== movesBefore.get(slider)));
+      if (rooms.first) {
+        remember(rooms);
+        renewPage(rooms.page);
+      }
+      failures = 0;
+      document.body.classList.remove('offline');
+    } catch {
+      // One missed reply is just a blip. Nothing remembered is touched either way.
+      failures += 1;
+      if (failures >= FAILURES_BEFORE_OFFLINE) document.body.classList.add('offline');
+    }
+  }
+
+  async function choose(button) {
+    busy = true;
+    buttons.forEach((each) => { each.disabled = true; });
+    button.setAttribute('aria-busy', 'true');
+    await ask(`?to=${button.dataset.to}`, { method: 'POST' });
+    button.removeAttribute('aria-busy');
+    buttons.forEach((each) => { each.disabled = false; });
+    busy = false;
+  }
+
+  async function control(button) {
+    const action = button.dataset.do;
+    if (button === playPause) {
+      tapped = { playing: action === 'play', until: Date.now() + SETTLE_MS };
+      showPlaying(tapped.playing);
+    }
+    busy = true;
+    await ask(`?do=${action}`, { method: 'POST' });
+    busy = false;
+  }
+
+  // The first step of a group drag makes Sonos remember the ratio between the rooms.
+  function volumeKey(slider) {
+    if (slider !== groupSlider || !groupDragStarting) return slider.dataset.room;
+    groupDragStarting = false;
+    return 'groupstart';
+  }
+
+  // One request per slider at a time, ending on wherever it stopped.
+  async function sendVolume(slider) {
+    if (sendingVolume.has(slider)) return;
+    sendingVolume.add(slider);
+    let sent;
+    do {
+      sent = slider.value;
+      await ask(`?${volumeKey(slider)}=${sent}`, { method: 'POST' });
+    } while (slider.value !== sent);
+    sendingVolume.delete(slider);
+  }
+
+  function moveVolume(slider) {
+    moves.set(slider, moves.get(slider) + 1);
+    showLevel(slider, slider.value);
+    sendVolume(slider);
+  }
+
+  async function update() {
+    if (!busy && !sendingVolume.size && !document.hidden) await ask();
+  }
+
+  async function keepUpdating() {
+    await update();
+    setTimeout(keepUpdating, UPDATE_EVERY_MS);
+  }
+
+  buttons.forEach((button) => button.addEventListener('click', () => choose(button)));
+  controls.forEach((button) => button.addEventListener('click', () => control(button)));
+  sliders.forEach((slider) => slider.addEventListener('input', () => moveVolume(slider)));
+  for (const gesture of ['pointerdown', 'keydown']) {
+    groupSlider.addEventListener(gesture, () => { groupDragStarting = true; });
+  }
+  document.addEventListener('visibilitychange', update);
+  document.addEventListener('gesturestart', (event) => event.preventDefault());
+
+  const lastKnown = remembered();
+  if (lastKnown) render(lastKnown);
+  keepUpdating();
+</script>
+</body>
+</html>

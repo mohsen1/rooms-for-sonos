@@ -1,0 +1,4 @@
+# sonos.sh sets variables that the scripts sourcing it read, FIRST and SECOND come
+# from the config file, and the ssh commands are meant to expand on this side.
+disable=SC2029,SC2034,SC2153
+external-sources=true

@@ -1,0 +1,60 @@
+#!/bin/sh
+# GET reports the rooms, what's playing and each room's volume.
+# POST ?to=first|second|everywhere moves the music.
+# POST ?first=0-100 or ?second=0-100 sets that room's volume.
+# POST ?groupstart=0-100 starts a group volume change, keeping the rooms' ratio.
+# POST ?group=0-100 continues it.
+# POST ?do=play|pause|next|previous controls whatever is playing.
+
+ROOMS_HOME=$(cd "$(dirname "$0")/../.." && pwd)
+# shellcheck source=app/sonos.sh
+. "$ROOMS_HOME/sonos.sh"
+
+reply() {
+	printf 'Content-Type: application/json\r\nCache-Control: no-store\r\n\r\n%s\n' "$1"
+	exit 0
+}
+
+locate || reply '{"error":"speakers"}'
+
+failed=false
+if [ "$REQUEST_METHOD" = POST ]; then
+	# Stops other websites open on this network from changing the rooms.
+	[ -z "$HTTP_ORIGIN" ] || [ "$HTTP_ORIGIN" = "http://$HTTP_HOST" ] || reply '{"error":"origin"}'
+	case "$QUERY_STRING" in
+	to=first) only "$FIP" "$FIRST" "$SIP" "$SECOND" || failed=true ;;
+	to=second) only "$SIP" "$SECOND" "$FIP" "$FIRST" || failed=true ;;
+	to=everywhere) together || failed=true ;;
+	first=[0-9] | first=[1-9][0-9] | first=100) set_volume "$FIP" "${QUERY_STRING#*=}" || failed=true ;;
+	second=[0-9] | second=[1-9][0-9] | second=100) set_volume "$SIP" "${QUERY_STRING#*=}" || failed=true ;;
+	groupstart=[0-9] | groupstart=[1-9][0-9] | groupstart=100)
+		find_leader
+		[ -n "$LIP" ] && snapshot_group "$LIP" && set_group_volume "$LIP" "${QUERY_STRING#*=}" || failed=true
+		;;
+	group=[0-9] | group=[1-9][0-9] | group=100)
+		find_leader
+		[ -n "$LIP" ] && set_group_volume "$LIP" "${QUERY_STRING#*=}" || failed=true
+		;;
+	do=play)
+		read_rooms
+		transport Play '<Speed>1</Speed>' || failed=true
+		;;
+	do=pause)
+		read_rooms
+		transport Pause || failed=true
+		;;
+	do=next)
+		read_rooms
+		transport Next || failed=true
+		;;
+	do=previous)
+		read_rooms
+		transport Previous || failed=true
+		;;
+	*) reply '{"error":"choice"}' ;;
+	esac
+fi
+
+read_rooms
+
+reply "{\"leader\":\"$LEADER\",\"firstName\":\"$FNAME\",\"secondName\":\"$SNAME\",\"first\":\"$FSTATE\",\"second\":\"$SSTATE\",\"firstVolume\":\"$FVOLUME\",\"secondVolume\":\"$SVOLUME\",\"groupVolume\":\"$GVOLUME\",\"player\":\"$PSTATE\",\"title\":\"$TITLE\",\"artist\":\"$ARTIST\",\"art\":\"$ART\",\"page\":\"$(cat "$ROOMS_HOME/version" 2>/dev/null)\",\"failed\":$failed}"
