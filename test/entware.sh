@@ -4,7 +4,7 @@
 #
 #   docker run --rm -v "$PWD:/src:ro" alpine:3.22 sh /src/test/entware.sh
 
-apk add --quiet --no-cache ca-certificates python3 wget
+apk add --quiet --no-cache ca-certificates lighttpd python3 wget
 
 case "$(uname -m)" in
 aarch64) feed=aarch64-k3.10 ;;
@@ -29,6 +29,12 @@ until wget -q -T 1 -O /dev/null http://127.0.1.11:1400/xml/device_description.xm
 	sleep 1
 done
 
+# DD-WRT can run a lighttpd of its own, which Rooms has to leave alone.
+mkdir -p /srv/router
+echo router > /srv/router/index.html
+printf 'server.document-root = "/srv/router"\nserver.port = 8085\nserver.pid-file = "/tmp/router-lighttpd.pid"\n' > /tmp/router-lighttpd.conf
+/usr/sbin/lighttpd -f /tmp/router-lighttpd.conf
+
 printf '2\n3\n' | SUBNET=127.0.1 sh "$ROOMS_HOME/deploy/apply.sh" || exit 1
 
 export PATH="/opt/sbin:/opt/bin:$PATH"
@@ -48,6 +54,8 @@ check() { # description actual expected
 }
 
 base=http://127.0.0.1:8081
+router_page() { curl -s -m 5 -o /dev/null -w '%{http_code}' http://127.0.0.1:8085/index.html; }
+check "installing leaves the router's own lighttpd running" "$(router_page)" 200
 check "curl comes from Entware" "$(command -v curl)" /opt/bin/curl
 check "the system has no other curl" "$([ -e /usr/bin/curl ] && echo yes || echo no)" no
 check "page is served" "$(curl -s -m 5 -o /dev/null -w '%{http_code}' "$base/")" 200
@@ -70,12 +78,14 @@ check "stopping leaves nothing running" "$(curl -s -m 2 -o /dev/null -w '%{http_
 /opt/etc/init.d/rc.unslung start > /dev/null 2>&1
 sleep 2
 check "the startup command brings it back" "$(curl -s -m 5 -o /dev/null -w '%{http_code}' "$base/")" 200
+check "stopping and starting leaves the router's own lighttpd running" "$(router_page)" 200
 
 echo "--- removal"
 sh "$ROOMS_HOME/deploy/remove.sh" > /dev/null
 sleep 1
 check "removal stops the server" "$(curl -s -m 2 -o /dev/null -w '%{http_code}' "$base/")" 000
 check "removal deletes the files" "$([ -d "$ROOMS_HOME" ] && echo there || echo gone)" gone
+check "removal leaves the router's own lighttpd running" "$(router_page)" 200
 
 echo
 echo "$passed passed, $failed failed"

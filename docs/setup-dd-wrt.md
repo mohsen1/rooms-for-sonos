@@ -103,7 +103,7 @@ cd rooms-for-sonos
 
 You'll be asked for the router's password twice, once to copy the files and once to set them up.
 
-The installer adds `lighttpd` and `curl` from Entware, then looks for speakers. If it finds exactly two rooms, it uses them. If it finds more, it lists them and asks you to pick two by number. It finishes with:
+The installer adds `lighttpd` and `curl` from Entware, then looks for speakers. Rooms runs its own copy of lighttpd on port 8081, separate from any lighttpd that DD-WRT itself runs. If it finds exactly two rooms, it uses them. If it finds more, it lists them and asks you to pick two by number. It finishes with:
 
 ```text
 Rooms is running on port 8081.

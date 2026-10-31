@@ -1,10 +1,31 @@
 #!/bin/sh
+# Starts Rooms' own lighttpd. Entware's rc.func finds programs by name, so it would
+# also stop, or mistake this for, a lighttpd that DD-WRT itself is running.
 
-ENABLED=yes
-PROCS=lighttpd
-ARGS="-f @HOME@/lighttpd.conf"
-PREARGS=""
-DESC=$PROCS
 PATH=/opt/sbin:/opt/bin:/usr/sbin:/usr/bin:/sbin:/bin
+PIDFILE=/tmp/rooms-lighttpd.pid
 
-. /opt/etc/init.d/rc.func
+running() {
+	[ -f "$PIDFILE" ] && kill -0 "$(cat "$PIDFILE")" 2>/dev/null
+}
+
+start() {
+	running || lighttpd -f "@HOME@/lighttpd.conf"
+}
+
+stop() {
+	running && kill "$(cat "$PIDFILE")"
+	rm -f "$PIDFILE"
+}
+
+case "$1" in
+start) start ;;
+stop) stop ;;
+restart)
+	stop
+	sleep 1
+	start
+	;;
+check) running && echo alive || echo dead ;;
+*) echo "Usage: $0 start|stop|restart|check" >&2 ;;
+esac

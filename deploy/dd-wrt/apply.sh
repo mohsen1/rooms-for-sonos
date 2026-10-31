@@ -14,7 +14,17 @@ if ! command -v opkg >/dev/null; then
 fi
 
 opkg update
+
+# The lighttpd package adds a service that starts at boot on this same port.
+# Turn that off, unless it was already here before Rooms.
+new_lighttpd=yes
+opkg list-installed | grep -q '^lighttpd ' && new_lighttpd=no
+
 opkg install lighttpd lighttpd-mod-cgi lighttpd-mod-setenv curl
+
+if [ "$new_lighttpd" = yes ] && [ -x /opt/etc/init.d/S80lighttpd ]; then
+	chmod -x /opt/etc/init.d/S80lighttpd
+fi
 
 # DD-WRT trims BusyBox to fit each router, so check before anything depends on these.
 for tool in awk cut date grep sed sort tr wc; do
@@ -23,12 +33,6 @@ for tool in awk cut date grep sed sort tr wc; do
 		exit 1
 	fi
 done
-
-# Entware's own lighttpd service starts at boot and also listens on 8081.
-if [ -x /opt/etc/init.d/S80lighttpd ]; then
-	/opt/etc/init.d/S80lighttpd stop || true
-	chmod -x /opt/etc/init.d/S80lighttpd
-fi
 
 sh "$ROOMS_HOME/setup.sh"
 

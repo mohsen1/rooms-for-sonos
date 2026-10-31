@@ -9,7 +9,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
-      - run: shellcheck -s sh app/sonos.sh app/setup.sh app/www/cgi-bin/rooms install.sh uninstall.sh deploy/*/apply.sh deploy/*/remove.sh test/*.sh
+      - run: shellcheck -s sh app/sonos.sh app/setup.sh app/www/cgi-bin/rooms install.sh uninstall.sh deploy/*/apply.sh deploy/*/remove.sh deploy/dd-wrt/init test/*.sh
 
   busybox-and-lighttpd:
     runs-on: ubuntu-latest
