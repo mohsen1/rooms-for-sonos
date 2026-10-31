@@ -25,7 +25,9 @@ sed -i 's/__VERSION__/1234/' "$ROOMS_HOME/www/index.html"
 echo 1234 > "$ROOMS_HOME/version"
 
 python3 /src/test/fake_sonos.py &
-sleep 3
+until wget -q -T 1 -O /dev/null http://127.0.1.11:1400/xml/device_description.xml; do
+	sleep 1
+done
 
 printf '2\n3\n' | SUBNET=127.0.1 sh "$ROOMS_HOME/deploy/apply.sh" || exit 1
 

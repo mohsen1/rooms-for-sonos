@@ -9,6 +9,7 @@ habits Rooms depends on, such as reporting no track details while Spotify is pau
 import html
 import http.server
 import re
+import socketserver
 import threading
 from xml.sax.saxutils import escape
 
@@ -208,6 +209,11 @@ def handler_for(speaker):
 
 class Server(http.server.ThreadingHTTPServer):
     daemon_threads = True
+
+    def server_bind(self):
+        # HTTPServer's own version looks the address up in DNS, which can take many seconds.
+        socketserver.TCPServer.server_bind(self)
+        self.server_name, self.server_port = self.server_address
 
 
 servers = [Server((speaker.ip, 1400), handler_for(speaker)) for speaker in EVERYONE]
